@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adaptive Voice Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: patient, warm, plain-spoken. For anyone who talks slowly, stumbles over words, or loses the thread
+   IDEA: a kitchen-counter smart speaker with its settings drawer pulled open
+   PICTURE: a large breathing orb ringed by a "patience" arc that shows how long it will wait for you
+   COLOUR and TYPE: deep spruce field, white, coral accent; Atkinson Hyperlegible throughout
+   LAYOUT: device panel left (orb, captions, conversation), adaptation drawer right; stacks under 900px */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0c1514);--ink:light-dark(#122020,#e6efed);--muted:light-dark(#4a5d5a,#9db1ac);--line:light-dark(#d9e4e1,#24332f);--soft:light-dark(#f1f6f4,#131e1c);--deep:light-dark(#0f3b3a,#0a2b2a);--deep2:light-dark(#165250,#103d3b);--on:#eaf5f2;--onm:#a9c9c3;--accent:#ff7a59;--accent2:light-dark(#b8401f,#ff9a7f)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 "Atkinson Hyperlegible",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(20px,3.5vw,48px) max(4vw,16px)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;gap:20px 40px;align-items:center;justify-content:space-between;max-width:1320px;margin:0 auto;padding-bottom:12px}
+h1{font-size:clamp(30px,4vw,44px);line-height:1.05;margin:0 0 8px;text-wrap:balance}
+.lede{margin:0;max-width:62ch;color:var(--muted)}
+.switch{display:flex;align-items:center;gap:14px;padding:12px 18px;border:2px solid var(--line);border-radius:999px;cursor:pointer;user-select:none}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.track{width:64px;height:36px;border-radius:999px;background:var(--line);position:relative;transition:background .2s;flex:none}
+.knob{position:absolute;top:4px;left:4px;width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0004;transition:transform .2s}
+.switch input:checked+.track{background:var(--accent)}
+.switch input:checked+.track .knob{transform:translateX(28px)}
+.switch input:focus-visible+.track{outline:3px solid var(--accent);outline-offset:3px}
+.switch b{display:block;font-size:18px}.switch small{color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:24px;max-width:1320px;margin:0 auto;padding-top:12px}
+@media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.device{background:var(--deep);color:var(--on);border-radius:28px;padding:clamp(18px,3vw,32px);display:flex;flex-direction:column;gap:18px}
+.stage{display:grid;justify-items:center;gap:8px;padding:8px 0 4px;text-align:center}
+.orb{position:relative;width:clamp(170px,26vw,230px);aspect-ratio:1;border:0;background:none;padding:0;border-radius:50%}
+.ring{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.rtrack{fill:none;stroke:#ffffff1a;stroke-width:6}
+.rbar{fill:none;stroke:var(--accent);stroke-width:6;stroke-linecap:round;stroke-dasharray:578;stroke-dashoffset:578}
+.core{position:absolute;inset:16%;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#3d8f88,#1b5e5a 55%,#0b3433);box-shadow:inset 0 -10px 24px #0006,inset 0 6px 14px #ffffff26,0 18px 40px #0007;transition:transform .3s}
+.core svg{width:34%;height:34%;fill:none;stroke:var(--on);stroke-width:2;stroke-linecap:round}
+.device[data-state=listening] .core{background:radial-gradient(circle at 35% 30%,#ffa58a,#ff7a59 55%,#c2462a);animation:breathe 1.8s ease-in-out infinite}
+.device[data-state=speaking] .core{animation:breathe 1s ease-in-out infinite}
+.device[data-state=thinking] .core{opacity:.8}
+@keyframes breathe{50%{transform:scale(1.06)}}
+@media(prefers-reduced-motion:reduce){.core{animation:none!important;transition:none}}
+.state{margin:6px 0 0;font-weight:700;font-size:18px}
+.caption{margin:0;min-height:3.2em;max-width:36ch;font-size:clamp(18px,2vw,22px);line-height:1.4;color:var(--on)}
+.caption.live{color:var(--onm);font-style:italic}
+.notice{background:#ffffff14;border-left:4px solid var(--accent);padding:10px 14px;border-radius:8px;font-size:15px}
+.ask{display:flex;flex-wrap:wrap;gap:8px}
+.ask input{flex:1 1 220px;font-size:16px;min-height:48px;padding:0 14px;border-radius:12px;border:2px solid #ffffff30;background:#00000026;color:var(--on)}
+.ask input::placeholder{color:var(--onm)}
+.ask select{min-height:48px;border-radius:12px;border:2px solid #ffffff30;background:var(--deep2);color:var(--on);padding:0 10px;font-size:15px}
+.ask button,.pri{min-height:48px;padding:0 20px;border-radius:12px;border:0;background:var(--accent);color:#2a0d04;font-weight:700}
+.opts{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;color:var(--onm);align-items:center}
+.opts label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.opts input{width:18px;height:18px;accent-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{border:1.5px solid #ffffff38;background:transparent;color:var(--on);border-radius:999px;padding:8px 14px;font-size:14px;min-height:40px;text-align:left}
+.chips button:hover{background:#ffffff14}
+.log{list-style:none;margin:0;padding:12px;display:flex;flex-direction:column;gap:10px;max-height:340px;overflow-y:auto;background:#0000002e;border-radius:16px}
+.log li{max-width:85%;padding:9px 14px;border-radius:16px;font-size:16px;overflow-wrap:anywhere}
+.log .me{align-self:flex-end;background:var(--accent);color:#2a0d04;border-bottom-right-radius:4px}
+.log .bot{align-self:flex-start;background:var(--deep2);border-bottom-left-radius:4px}
+.log .sys{align-self:center;background:none;color:var(--onm);font-size:14px;text-align:center}
+.side{display:flex;flex-direction:column;gap:18px}
+.card{border:2px solid var(--line);border-radius:22px;padding:18px 20px}
+.card h2{font-size:20px;margin:0 0 12px}
+.m{margin-bottom:14px}.m:last-child{margin-bottom:0}
+.mh{display:flex;justify-content:space-between;gap:10px;font-size:15px}
+.mh b{white-space:nowrap}
+.bar{height:10px;background:var(--soft);border-radius:999px;overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:999px;transition:width .5s}
+.off .bar i{background:var(--muted)}
+.m small,.hint{display:block;color:var(--muted);font-size:13.5px;margin-top:4px}
+.said{font-size:16px;margin:0 0 6px}.said span{color:var(--muted);font-size:13.5px;display:block}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tags span{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:3px 9px;font-size:13.5px}
+.mem h3{font-size:15px;margin:12px 0 4px;color:var(--muted);font-weight:700}
+.mem h3:first-child{margin-top:0}
+.mem ul{margin:0;padding-left:20px;font-size:15.5px}
+.mem p{margin:0;font-size:15.5px}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.ghost{min-height:44px;padding:0 14px;border-radius:12px;border:2px solid var(--line);background:transparent;font-size:15px}
+.ghost:hover{background:var(--soft)}
+.foot{max-width:1320px;margin:0 auto;padding-top:0;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<header class="band top">
+  <div>
+    <h1>Adaptive Voice Assistant</h1>
+    <p class="lede">A mode any voice assistant or voice search app could switch on. It learns how fast you speak, waits through your pauses, understands hesitations and self-corrections, and keeps track of what you were doing.</p>
+  </div>
+  <label class="switch"><input type="checkbox" id="mode"><span class="track"><span class="knob"></span></span><span><b>Adaptive Mode</b><small id="modeTxt">On</small></span></label>
+</header>
+
+<main class="band grid">
+  <section class="device" id="device" data-state="idle">
+    <div class="stage">
+      <button class="orb" id="mic" aria-label="Tap to talk">
+        <svg class="ring" viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="92" class="rtrack"/><circle cx="100" cy="100" r="92" class="rbar" id="rbar"/></svg>
+        <span class="core"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+      </button>
+      <p class="state" id="stateTxt">Tap to talk</p>
+      <p class="caption" id="caption" aria-live="polite"></p>
+    </div>
+    <div class="notice" id="notice" hidden></div>
+    <form class="ask" id="form">
+      <input id="txt" placeholder="Or type what you'd say…" autocomplete="off" aria-label="Type what you would say">
+      <select id="pace" aria-label="Speaking style used for typed input">
+        <option value="slow">Typed as: slow, with pauses</option>
+        <option value="avg">Typed as: average pace</option>
+        <option value="fast">Typed as: fast talker</option>
+      </select>
+      <button type="submit">Send</button>
+    </form>
+    <div class="opts">
+      <label><input type="checkbox" id="voice" checked> Speak replies aloud</label>
+      <span>Try saying:</span>
+    </div>
+    <div class="chips" id="chips"></div>
+    <ol class="log" id="log"></ol>
+  </section>
+
+  <aside class="side">
+    <section class="card" id="meterCard"><h2>How it's adapting to you</h2><div id="meters"></div></section>
+    <section class="card"><h2>What it heard, what it understood</h2><div id="heard"><p class="hint">Say or type something to see how Adaptive Mode cleans it up.</p></div></section>
+    <section class="card"><h2>What it remembers</h2><div class="mem" id="memory"></div>
+      <div class="row"><button class="ghost" id="resetPace">Reset pace learning</button><button class="ghost" id="clearMem">Clear memory</button></div>
+    </section>
+  </aside>
+</main>
+<p class="band foot">Prototype. Speech runs through your browser's built-in recognition and voices (Chrome or Edge work best). Memory stays in this browser only.</p>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const defMem=()=>({lists:{shopping:['eggs','oats','bananas','olive oil','tea']},notes:[],reminders:[],facts:{},aliases:{},topics:[],lastList:'shopping',lastAdded:'tea'});
+let mem=Object.assign(defMem(),store.get('ava-mem',{}));
+const pace=store.get('ava-pace',{wpm:null,pause:null,samples:0,manual:0});
+const S={adaptive:store.get('ava-adaptive',true),voice:true,pending:null,fragment:null,lastReply:'',lastActive:Date.now(),timers:[],repeat:false};
+const save=()=>{store.set('ava-mem',mem);store.set('ava-pace',pace);store.set('ava-adaptive',S.adaptive)};
+
+/* ---------- adaptation model ---------- */
+const rate=()=>S.adaptive?clamp(Math.round(((pace.wpm?clamp(pace.wpm/150,.72,1.2):1)+pace.manual)*20)/20,.6,1.5):clamp(1+pace.manual,.6,1.5);
+const patience=()=>S.adaptive?clamp(Math.round(1200+(pace.pause??.6)*1700),1200,4500):800;
+const steps=()=>S.adaptive&&pace.wpm!=null&&pace.wpm<115;
+function learn(wpm,pause){const a=pace.samples<2?.6:.35;pace.wpm=pace.wpm==null?wpm:pace.wpm+(wpm-pace.wpm)*a;pace.pause=pace.pause==null?pause:pace.pause+(pause-pace.pause)*a;pace.samples++}
+
+/* ---------- speech clean-up ---------- */
+const NUM={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,ninety:90,'a couple of':2,'a couple':2,'a few':3};
+const NUMK=Object.keys(NUM).sort((a,b)=>b.length-a.length);
+function numify(t){
+  t=t.replace(/\bhalf an hour\b/g,'30 minutes').replace(/\ban hour\b/g,'1 hour').replace(/\ba minute\b/g,'1 minute');
+  t=t.replace(/\b(twenty|thirty|forty|fifty)[ -](one|two|three|four|five|six|seven|eight|nine)\b/g,(m,a,b)=>NUM[a]+NUM[b]);
+  for(const k of NUMK)t=t.replace(new RegExp('\\b'+k+'\\b','g'),NUM[k]);
+  return t;
+}
+const norm=s=>s.toLowerCase().replace(/[“”"]/g,'').replace(/[.,!?;:…]+/g,' ').replace(/\bto[- ]do list\b/g,'todo list').replace(/\s+/g,' ').trim();
+const sp=s=>s.replace(/\s+/g,' ').trim();
+const FILLERS=['you know what i mean','what do you call it','let me think','let me see','you know','i guess','um+','u+h+','e+r+m*','a+h+','h+m+','m{2,}'];
+const GAP=/\b(the thing|that thing|whatchamacallit|thingamajig|thingy|the whatsit|what's it called)\b/;
+function clean(raw){
+  let t=norm(raw);const notes=[];let n=0;
+  t=t.replace(/\b([a-z]{1,3})(?:-\1)*-([a-z]+)/g,(m,a,b)=>b.startsWith(a)?(n++,b):m);
+  if(n)notes.push(`Smoothed ${n} stutter${n>1?'s':''}`);
+  let f=0;for(const p of FILLERS)t=t.replace(new RegExp('\\b(?:'+p+')\\b','g'),()=>{f++;return ' '});
+  t=sp(t);if(f)notes.push(`Removed ${f} filler${f>1?'s':''}`);
+  t=numify(t);
+  let r=0,prev;do{prev=t;t=t.replace(/\b(\w+(?:\s+\w+){0,3})\s+\1\b/g,(m,a)=>/^\d+$/.test(a)?m:(r++,a))}while(t!==prev);
+  const t2=t.replace(/\b(to|for|on|in|at|with) (?:the|my|a|an) (?=\1\b)/g,'');
+  if(t2!==t){r++;t=t2}
+  if(r)notes.push(`Dropped ${r} repeat${r>1?'s':''} or restart${r>1?'s':''}`);
+  const cm=t.match(/^(.*\S)\s+(?:no wait|no no|no sorry|sorry|i mean|actually|scratch that|make that|wait|rather)\s+(.+)$/)||t.match(/^(.*\d.*?)\s+no\s+(\d.*)$/)||t.match(/^(.*\S)\s+no\s+((?:the|a|an|my|your) \S.*)$/);
+  if(cm){
+    const b=cm[1],a=cm[2];let out;
+    const an=a.match(/^(\d+)\s*(seconds?|minutes?|hours?)?\b(.*)$/);
+    if(an&&/\d/.test(b))out=b.replace(/(\d+)(\s*(?:seconds?|minutes?|hours?))?(?!.*\d)/,(m,num,unit)=>an[1]+(an[2]?' '+an[2]:(unit||'')))+(an[3]||'');
+    else if(parse(a))out=a;
+    else{const aw=a.split(' '),bw=b.split(' ');out=aw.length<=3&&bw.length>aw.length?bw.slice(0,bw.length-aw.length).concat(aw).join(' '):b+' '+a}
+    t=sp(out);notes.push(`Self-correction: kept “${a}”`);
+  }
+  for(const [from,to] of Object.entries(mem.aliases))if(t.includes(from)){t=t.split(from).join(to);notes.push(`Your phrase “${from}” → “${to}”`)}
+  const gap=GAP.test(t);if(gap)notes.push('Word-finding pause noticed');
+  return{t,notes,gap};
+}
+const incomplete=t=>/\b(for|to|the|a|an|my|of|and|add|set|remind me|put|in|at|with|about|called|is|timer|on)$/.test(t);
+
+/* ---------- understanding ---------- */
+const U='(seconds?|secs?|minutes?|mins?|hours?|hrs?)';
+const unitMs=u=>/^h/.test(u)?3600000:/^m/.test(u)?60000:1000;
+const unitName=(n,u)=>{const b=/^h/.test(u)?'hour':/^m/.test(u)?'minute':'second';return n+' '+b+(n==1?'':'s')};
+function parse(t){
+  const A=S.adaptive;let m;
+  if(A&&(m=t.match(/^when i say (.+?) i mean (.+)$/)))return{i:'alias',from:m[1],to:m[2]};
+  if(/^(never ?mind|forget it|cancel that|forget that)$/.test(t))return{i:'nevermind'};
+  if(/(what was i (doing|saying|asking|about to)|where were we|what were we (doing|talking about)|catch me up|where was i)/.test(t))return{i:'recap'};
+  if(/^(repeat( that)?|say (that|it) again|what did you (just )?say|pardon( me)?|come again|sorry what|what)$/.test(t))return{i:'repeat'};
+  if(/(slow down|speak (more )?slow|talk (more )?slow|too fast|slower)/.test(t))return{i:'slower'};
+  if(/(speed up|speak faster|talk faster|too slow|faster)/.test(t))return{i:'faster'};
+  if(/(cancel|stop|delete|clear) (the |my |all |all the )?(timers?|alarms?)/.test(t))return{i:'cancelTimer'};
+  if(/how (much time|long).*(left|remaining)|timer status/.test(t))return{i:'timerStatus'};
+  m=A?(t.match(new RegExp('(\\d+)\\s*'+U+'\\b.*\\b(?:timer|alarm)'))||t.match(new RegExp('\\b(?:timer|alarm)\\b.*?(\\d+)\\s*'+U+'\\b'))):t.match(new RegExp('^(?:set|start) (?:a )?timer for (\\d+) '+U+'$'));
+  if(m)return{i:'timer',n:+m[1],u:m[2]};
+  if(/(what are|read|show|tell me|list) (me )?(my )?reminders/.test(t))return{i:'readReminders'};
+  if(m=t.match(new RegExp('^remind me in (\\d+) '+U+' (?:to )?(.+)$')))return{i:'remind',n:+m[1],u:m[2],text:m[3]};
+  if(m=t.match(new RegExp('^remind me (?:to )?(.+?)(?: in (\\d+) '+U+')?$')))return{i:'remind',text:m[1],n:m[2]?+m[2]:0,u:m[3]};
+  if(m=t.match(/^(?:remove|take|delete|cross) (.+?) (?:off|from|out of) (?:my |the )?(?:(\w+) )?list$/))return{i:'remove',items:m[1],list:m[2]};
+  if(m=t.match(/^(?:clear|empty) (?:my |the )?(?:(\w+) )?list$/))return{i:'clearList',list:m[1]};
+  if(m=t.match(/^(?:please )?(?:add|put) (.+?) (?:to|on|onto) (?:my |the )?(?:(\w+) )?list$/))return{i:'add',items:m[1],list:m[2]};
+  if(m=t.match(/(?:what'?s on|what is on|read|show|tell me|what'?s in|what is in|check) (?:me )?(?:my |the )?(?:(\w+) )?list/))return{i:'read',list:m[1]};
+  if(/(read|what are|show|tell me) (me )?(my )?notes/.test(t))return{i:'readNotes'};
+  if(m=t.match(/^(?:take a note|make a note|note|write down|jot down)(?: that)? (.+)$/))return{i:'note',text:m[1]};
+  if(/what'?s my name|what is my name|do you know my name|who am i/.test(t))return{i:'getName'};
+  if(m=t.match(/(?:my name is|call me|i'?m called) ([a-z]+)/))return{i:'name',name:m[1]};
+  if(/\b(what time|the time|time is it)\b/.test(t))return{i:'time'};
+  if(/(what'?s the date|what day|today'?s date|what is the date|the date)/.test(t))return{i:'date'};
+  if(m=t.match(/(-?\d+(?:\.\d+)?) (plus|minus|times|x|multiplied by|divided by|over) (-?\d+(?:\.\d+)?)/))return{i:'math',a:+m[1],op:m[2],b:+m[3]};
+  if(/\b(help|what can you do)\b/.test(t))return{i:'help'};
+  if(/^(hi|hello|hey|good (morning|afternoon|evening))\b/.test(t))return{i:'hello'};
+  if(/\b(thank|thanks)\b/.test(t))return{i:'thanks'};
+  return null;
+}
+function guess(t){
+  let m;
+  if(m=t.match(/(?:i need|we need|we'?re out of|i'?m out of|buy|pick up|get some|need) (.+)$/))return{i:'add',items:m[1],list:'shopping',guess:true};
+  if(/(timer|alarm|countdown)/.test(t)&&(m=t.match(new RegExp('(\\d+)\\s*'+U))))return{i:'timer',n:+m[1],u:m[2],guess:true};
+  if(/(timer|alarm|countdown)/.test(t)&&(m=t.match(/(\d+)/)))return{i:'timer',n:+m[1],u:'minutes',guess:true};
+  if(m=t.match(/(?:remind|don'?t (?:let me )?forget|remember to) (?:me )?(?:to )?(.+)$/))return{i:'remind',text:m[1],n:0,guess:true};
+  if(/\blist\b/.test(t))return{i:'read',list:null,guess:true};
+  if(/\btime\b/.test(t))return{i:'time'};
+  if(/\b(day|date|today)\b/.test(t))return{i:'date'};
+  if(m=t.match(/\b(?:note|write) (.+)$/))return{i:'note',text:m[1],guess:true};
+  return null;
+}
+
+/* ---------- actions ---------- */
+const join=a=>a.length<2?(a[0]||''):a.length===2?a.join(' and '):a.slice(0,-1).join(', ')+', and '+a.at(-1);
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const you=s=>s.replace(/\bmy\b/g,'your').replace(/\bme\b/g,'you').replace(/\bi\b/g,'you').replace(/\bmyself\b/g,'yourself');
+const clock=ms=>new Date(ms).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+const left=ms=>{const s=Math.max(0,Math.round(ms/1000)),m=Math.floor(s/60);return m?`${m} min ${s%60} sec`:`${s} sec`};
+const splitItems=s=>s.split(/,| and /).map(x=>x.trim().replace(/^(some|a|an|the|more) /,'')).filter(Boolean);
+const listName=l=>l?(/^(grocery|groceries)$/.test(l)?'shopping':l):(S.adaptive?mem.lastList:'shopping');
+const topic=s=>{mem.topics.push(s);mem.topics=mem.topics.slice(-8)};
+function describe(p){
+  return p.i==='add'?`add ${join(splitItems(p.items))} to your ${listName(p.list)} list`:p.i==='timer'?`set a timer for ${unitName(p.n,p.u)}`:p.i==='remind'?`remind you to ${you(p.text)}`:p.i==='read'?`read your ${listName(p.list)} list`:`make a note: “${p.text}”`;
+}
+function readList(name){
+  const L=mem.lists[name];mem.lastList=name;
+  if(!L||!L.length)return`Your ${name} list is empty.`;
+  if(S.adaptive&&L.length>4){S.pending={type:'more',name,i:3};return`Your ${name} list has ${L.length} things. The first three are ${join(L.slice(0,3))}. Want to hear the rest?`}
+  return`Your ${name} list has ${join(L)}.`;
+}
+function more(P){
+  const L=mem.lists[P.name]||[],chunk=L.slice(P.i,P.i+3);
+  if(!chunk.length)return"That's everything on the list.";
+  if(P.i+3<L.length){S.pending={type:'more',name:P.name,i:P.i+3};return`Next: ${join(chunk)}. Want more?`}
+  return`And the last ${chunk.length>1?'ones are':'one is'} ${join(chunk)}. That's the whole list.`;
+}
+function recap(){
+  const bits=[];
+  if(S.fragment)bits.push(`you'd started to say “${S.fragment}” and hadn't finished`);
+  const last=mem.topics.slice(-3);if(last.length)bits.push('most recently, '+join(last));
+  if(S.timers.length)bits.push(`you have ${S.timers.length} timer${S.timers.length>1?'s':''} running, with ${left(S.timers[0].end-Date.now())} left on the next one`);
+  const due=mem.reminders.filter(r=>r.due);if(due.length)bits.push(`I'll remind you to ${due[0].text} at ${clock(due[0].due)}`);
+  if(!bits.length)return"We haven't done anything yet. You could start by adding something to a list or setting a timer.";
+  return bits.map(cap).join('. ')+'.';
+}
+function run(p){
+  const A=S.adaptive;
+  switch(p.i){
+    case'alias':mem.aliases[p.from]=p.to;return`Got it. When you say “${p.from}”, I'll take it to mean “${p.to}”.`;
+    case'nevermind':S.fragment=null;return"No problem. I've let that go.";
+    case'recap':return A?recap():"Sorry, I don't know what you were doing.";
+    case'repeat':if(!S.lastReply)return"I haven't said anything yet.";S.repeat=true;return S.lastReply;
+    case'slower':pace.manual=clamp(pace.manual-.1,-.4,.4);return"Okay, I'll speak more slowly.";
+    case'faster':pace.manual=clamp(pace.manual+.1,-.4,.4);return"Okay, I'll speak a bit faster.";
+    case'cancelTimer':{const n=S.timers.length;S.timers=[];return n?`Cancelled ${n} timer${n>1?'s':''}.`:'There are no timers running.'}
+    case'timerStatus':return S.timers.length?S.timers.map(x=>`${left(x.end-Date.now())} left on your ${x.label} timer`).join('. ')+'.':'No timers are running.';
+    case'timer':{if(!p.n)return'How long should the timer be?';const end=Date.now()+p.n*unitMs(p.u),label=unitName(p.n,p.u).replace(/s$/,'');S.timers.push({label,end});S.timers.sort((a,b)=>a.end-b.end);topic(`you set a ${label} timer`);return A?`Timer set for ${unitName(p.n,p.u)}. It will go off at ${clock(end)}.`:'Timer set.'}
+    case'remind':{const text=you(p.text);if(p.n){const due=Date.now()+p.n*unitMs(p.u);mem.reminders.push({text,due});topic(`you asked me to remind you to ${text}`);return A?`Okay. In ${unitName(p.n,p.u)}, at ${clock(due)}, I'll remind you to ${text}.`:'Reminder set.'}mem.reminders.push({text,due:0});topic(`you asked me to remind you to ${text}`);return A?`Okay, I'll hold on to that: ${text}. Ask “what are my reminders” any time.`:'Reminder saved.'}
+    case'readReminders':return mem.reminders.length?`You have ${mem.reminders.length} reminder${mem.reminders.length>1?'s':''}: ${join(mem.reminders.map(r=>r.text+(r.due?` at ${clock(r.due)}`:'')))}.`:'You have no reminders.';
+    case'add':{const name=listName(p.list),items=splitItems(p.items);const L=mem.lists[name]||(mem.lists[name]=[]);for(const x of items)if(!L.includes(x))L.push(x);mem.lastList=name;mem.lastAdded=items.at(-1);topic(`you added ${join(items)} to your ${name} list`);return A?`Added ${join(items)} to your ${name} list. It now has ${L.length} thing${L.length>1?'s':''}.`:`Added ${join(items)} to ${name}.`}
+    case'remove':{const name=listName(p.list),items=splitItems(p.items),L=mem.lists[name]||[];const gone=items.filter(x=>L.includes(x));mem.lists[name]=L.filter(x=>!items.includes(x));mem.lastList=name;if(!gone.length)return`I couldn't find ${join(items)} on your ${name} list.`;topic(`you took ${join(gone)} off your ${name} list`);return`Removed ${join(gone)} from your ${name} list.`}
+    case'clearList':{const name=listName(p.list);mem.lists[name]=[];topic(`you cleared your ${name} list`);return`Your ${name} list is now empty.`}
+    case'read':return readList(listName(p.list));
+    case'readNotes':return mem.notes.length?`You have ${mem.notes.length} note${mem.notes.length>1?'s':''}. ${mem.notes.length>3&&A?'The latest three: ':''}${(A?mem.notes.slice(-3):mem.notes).join('. ')}.`:"You don't have any notes yet.";
+    case'note':mem.notes.push(p.text);topic(`you made a note: “${p.text}”`);return`Noted: ${p.text}.`;
+    case'getName':return mem.facts.name?`You're ${cap(mem.facts.name)}.`:"I don't know your name yet. You can say “my name is…”.";
+    case'name':mem.facts.name=p.name;return`Nice to meet you, ${cap(p.name)}.`;
+    case'time':return`It's ${clock(Date.now())}.`;
+    case'date':return`Today is ${new Date().toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'})}.`;
+    case'math':{const r=p.op==='plus'?p.a+p.b:p.op==='minus'?p.a-p.b:/times|x|multiplied/.test(p.op)?p.a*p.b:p.b===0?NaN:p.a/p.b;return isNaN(r)?"I can't divide by zero.":`${p.a} ${p.op} ${p.b} is ${Math.round(r*1000)/1000}.`}
+    case'help':return'I can set timers, add things to lists, take notes, set reminders, tell you the time or date, and do quick math. With Adaptive Mode on, you can also ask “what was I doing?” and I will catch you up.';
+    case'hello':return`Hello${mem.facts.name&&A?', '+cap(mem.facts.name):''}. What can I do for you?`;
+    case'thanks':return"You're welcome.";
+  }
+}
+
+/* ---------- the conversation loop ---------- */
+function handle(raw,meta){
+  addMsg('me',raw);
+  const idle=Date.now()-S.lastActive;S.lastActive=Date.now();
+  let t,notes=[],gap=false,reply=null;
+  if(S.adaptive){const c=clean(raw);t=c.t;notes=c.notes;gap=c.gap;if(meta){learn(meta.wpm,meta.pause);notes.unshift(`Pace ${Math.round(meta.wpm)} wpm, pauses ${meta.pause.toFixed(1)} s`)}}
+  else t=numify(norm(raw));
+  const p0=parse(t),P=S.pending;S.pending=null;
+  if(P&&!p0){
+    if(P.type==='fill'){t=P.t.replace(GAP,t);gap=false;notes.push('Filled in the missing word')}
+    else if(/^(yes|yeah|yep|sure|ok|okay|please|correct|right|do it|go ahead)\b/.test(t))reply=P.type==='confirm'?run(P.p):more(P);
+    else if(/^(no|nope|nah|not really|don'?t)\b/.test(t))reply=P.type==='more'?"Okay, I'll stop there.":"Okay, I won't. What would you like instead?";
+    else if(P.type==='more'&&/^(more|keep going|go on|continue|the rest|next)/.test(t))reply=more(P);
+  }
+  if(!reply&&S.adaptive&&S.fragment){if(!p0){t=sp(S.fragment+' '+t);notes.push('Joined with what you started earlier')}if(!p0||p0.i!=='recap')S.fragment=null}
+  let p=null;
+  if(!reply){
+    if(S.adaptive&&gap){S.pending={type:'fill',t};reply=`No rush. What's the word you're looking for?${mem.lastAdded?` The last thing you added was ${mem.lastAdded}.`:''}`}
+    else{
+      p=parse(t);
+      if(!p&&S.adaptive){if(incomplete(t)){S.fragment=t;reply=`Take your time. So far I have “${t}”. Keep going whenever you're ready.`}else p=guess(t)}
+      if(!reply){
+        if(!p)reply=S.adaptive?`I didn't quite get that. I heard “${t}”. You can say it another way, or ask for help.`:"Sorry, I didn't understand that.";
+        else if(p.guess){S.pending={type:'confirm',p};reply=`Just checking: should I ${describe(p)}?`}
+        else reply=run(p);
+      }
+    }
+  }
+  if(S.adaptive&&idle>45000&&mem.topics.length>1&&(!p||p.i!=='recap')&&!S.repeat)reply=`Welcome back. Before, ${mem.topics.at(-2)}. `+reply;
+  showHeard(raw,t,notes);save();say(reply);render();
+}
+
+/* ---------- voice out ---------- */
+let tok=0,q=[];
+function stopSpeak(){tok++;q=[];try{speechSynthesis.cancel()}catch(e){}}
+function say(text){
+  const slow=S.repeat;S.repeat=false;
+  if(!slow)S.lastReply=text;
+  addMsg('bot',text);caption(text,false);
+  if(!S.voice||!('speechSynthesis' in window)){setState('idle');return}
+  stopSpeak();const my=tok;
+  q=steps()||slow?(text.match(/[^.!?]+[.!?]*/g)||[text]).map(s=>s.trim()).filter(Boolean):[text];
+  const r=clamp(rate()-(slow?.12:0),.5,1.6);
+  const next=()=>{if(my!==tok)return;const part=q.shift();if(!part){setState('idle');return}
+    const u=new SpeechSynthesisUtterance(part);u.rate=r;u.lang='en-US';
+    u.onend=()=>setTimeout(next,steps()||slow?450:0);u.onerror=()=>{if(my===tok)setState('idle')};
+    setState('speaking');try{speechSynthesis.speak(u)}catch(e){setState('idle')}};
+  next();
+}
+let ac=null;
+function chime(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();[660,880].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;o.connect(g);g.connect(ac.destination);const t0=ac.currentTime+i*.25;g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.2,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.6);o.start(t0);o.stop(t0+.65)})}catch(e){}}
+
+/* ---------- voice in ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,sess=null,endT=null;
+const rbar=$('#rbar');
+function ringRun(ms){rbar.style.transition='none';rbar.style.strokeDashoffset=ms?0:578;if(!ms)return;rbar.getBoundingClientRect();rbar.style.transition=`stroke-dashoffset ${ms}ms linear`;rbar.style.strokeDashoffset=578}
+function arm(first){clearTimeout(endT);const ms=first?(S.adaptive?8000:5000):patience();ringRun(ms);endT=setTimeout(()=>{try{rec.stop()}catch(e){}finish()},ms)}
+function micBlocked(){notice('The microphone is blocked in this view. Open the standalone file in Chrome or Edge to talk out loud. Typing below works the same way: the speaking-style menu stands in for your voice.')}
+function listen(){
+  if(!SR){notice('This browser has no built-in speech recognition. Use Chrome, Edge or Safari to talk, or type below.');return}
+  stopSpeak();
+  try{rec=new SR()}catch(e){micBlocked();return}
+  rec.lang='en-US';rec.interimResults=true;rec.continuous=S.adaptive;
+  sess={t0:null,last:null,gaps:[],text:'',done:false};
+  rec.onresult=e=>{const now=performance.now();if(sess.t0==null)sess.t0=now;else{const g=now-sess.last;if(g>350)sess.gaps.push(g/1000)}sess.last=now;let txt='';for(const r of e.results)txt+=r[0].transcript;sess.text=txt;caption(txt,true);arm(false)};
+  rec.onerror=e=>{if(/not-allowed|service-not-allowed|audio-capture/.test(e.error))micBlocked();finish()};
+  rec.onend=()=>finish();
+  try{rec.start();setState('listening');caption(S.adaptive?'Take your time…':'Listening…',true);arm(true)}catch(e){micBlocked()}
+}
+function finish(){
+  if(!sess||sess.done)return;sess.done=true;clearTimeout(endT);ringRun(0);
+  try{rec&&rec.abort()}catch(e){}
+  const txt=sess.text.trim();if(!txt){setState('idle');caption('',false);return}
+  const dur=(sess.last-sess.t0)/1000,words=txt.split(/\s+/).length;
+  const gs=sess.gaps.slice().sort((a,b)=>a-b);
+  const meta=dur>.8&&words>=3?{wpm:clamp(words/dur*60,50,260),pause:gs.length?gs[gs.length>>1]:.3}:null;
+  setState('thinking');handle(txt,meta);
+}
+
+/* ---------- UI ---------- */
+const PACE={slow:{wpm:85,pause:1.7},avg:{wpm:140,pause:.6},fast:{wpm:190,pause:.3}};
+const SAMPLES=['um set a a timer for five, no, ten minutes','add eggs to the… to my shopping list','set a timer for','ten minutes','I need milk and bread','what\'s on my shopping list','remind me to call the pharmacy in twenty minutes','add the thing to my list','what was I doing?','say that again'];
+const STATE={idle:'Tap to talk',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
+function setState(s){$('#device').dataset.state=s;$('#stateTxt').textContent=s==='listening'&&S.adaptive?'Listening. I’ll wait for you':STATE[s];$('#mic').setAttribute('aria-label',s==='listening'?'Stop listening':'Tap to talk')}
+function caption(t,live){const c=$('#caption');c.textContent=t;c.classList.toggle('live',!!live)}
+function notice(t){const n=$('#notice');n.textContent=t;n.hidden=false}
+function addMsg(who,text){const li=document.createElement('li');li.className=who;li.textContent=text;const log=$('#log');log.appendChild(li);log.scrollTop=log.scrollHeight}
+function showHeard(raw,t,notes){
+  $('#heard').innerHTML=`<p class="said"><span>You said</span>“${esc(raw)}”</p><p class="said"><span>Understood as</span>“${esc(t)}”</p>`+
+  (S.adaptive?(notes.length?`<div class="tags">${notes.map(n=>`<span>${esc(n)}</span>`).join('')}</div>`:'<p class="hint">Nothing needed cleaning up.</p>'):'<p class="hint">Adaptive Mode is off, so your words were taken exactly as heard.</p>');
+}
+const row=(label,val,pct,sub)=>`<div class="m"><div class="mh"><span>${label}</span><b>${val}</b></div><div class="bar"><i style="width:${clamp(pct,3,100)}%"></i></div>${sub?`<small>${sub}</small>`:''}</div>`;
+function render(){
+  const A=S.adaptive;$('#meterCard').classList.toggle('off',!A);$('#modeTxt').textContent=A?'On: matching you':'Off: standard assistant';
+  const w=pace.wpm,pz=pace.pause;
+  $('#meters').innerHTML=
+    row('Your speaking pace',w?Math.round(w)+' wpm':'Learning…',w?w/220*100:0,A?(w?`Learned from ${pace.samples} turn${pace.samples>1?'s':''}`:'Talk a few times and it will learn your pace'):'Not tracked when the mode is off')+
+    row('Your typical pause',pz!=null?pz.toFixed(1)+' s':'Learning…',pz!=null?pz/2.5*100:0,'')+
+    row('How long it waits in silence',(patience()/1000).toFixed(1)+' s',patience()/4500*100,A?'Grows with your pauses, so it does not cut you off mid-thought':'Fixed and short, like most assistants')+
+    row('Its speaking speed',rate().toFixed(2)+'×',(rate()-.5)/1*100,A?'Matched to your pace'+(pace.manual?` (you asked for ${pace.manual<0?'slower':'faster'})`:''):'Fixed at normal speed')+
+    row('Reply style',steps()?'One step at a time':'Standard',steps()?100:40,A?'Slower speakers get shorter sentences, pauses between them, and long lists in groups of three':'Everything read out in one go');
+  const lists=Object.entries(mem.lists).map(([k,v])=>`<h3>${esc(cap(k))} list</h3>${v.length?`<p>${esc(v.join(', '))}</p>`:'<p class="hint">Empty</p>'}`).join('');
+  const tm=S.timers.length?`<h3>Timers</h3><ul>${S.timers.map(x=>`<li>${esc(x.label)}: ${left(x.end-Date.now())} left</li>`).join('')}</ul>`:'';
+  const rm=mem.reminders.length?`<h3>Reminders</h3><ul>${mem.reminders.map(r=>`<li>${esc(r.text)}${r.due?` at ${clock(r.due)}`:''}</li>`).join('')}</ul>`:'';
+  const nt=mem.notes.length?`<h3>Notes</h3><ul>${mem.notes.slice(-4).map(n=>`<li>${esc(n)}</li>`).join('')}</ul>`:'';
+  const fr=S.fragment?`<h3>Unfinished request</h3><p>“${esc(S.fragment)}”</p>`:'';
+  const tp=mem.topics.length?`<h3>Recent context${A?'':' (not used when off)'}</h3><ul>${mem.topics.slice(-3).map(x=>`<li>${esc(cap(x))}</li>`).join('')}</ul>`:'';
+  const al=Object.keys(mem.aliases).length?`<h3>Your phrases</h3><ul>${Object.entries(mem.aliases).map(([a,b])=>`<li>“${esc(a)}” means “${esc(b)}”</li>`).join('')}</ul>`:'';
+  const nm=mem.facts.name?`<h3>Name</h3><p>${esc(cap(mem.facts.name))}</p>`:'';
+  $('#memory').innerHTML=fr+tm+rm+lists+nt+tp+al+nm+'<p class="hint">The shopping list starts with sample items.</p>';
+}
+
+$('#mode').checked=S.adaptive;
+$('#mode').addEventListener('change',e=>{S.adaptive=e.target.checked;S.pending=null;S.fragment=null;save();render();addMsg('sys',S.adaptive?'Adaptive Mode on. Matching your pace, waiting through pauses, keeping track of context.':'Adaptive Mode off. Standard assistant behaviour.')});
+$('#voice').addEventListener('change',e=>{S.voice=e.target.checked;if(!S.voice)stopSpeak()});
+$('#mic').addEventListener('click',()=>{try{ac=ac||new(window.AudioContext||window.webkitAudioContext)()}catch(e){}if(sess&&!sess.done){try{rec.stop()}catch(e){}finish()}else listen()});
+$('#form').addEventListener('submit',e=>{e.preventDefault();const v=$('#txt').value.trim();if(!v)return;$('#txt').value='';stopSpeak();const p=PACE[$('#pace').value];handle(v,S.adaptive?{wpm:p.wpm*(.9+Math.random()*.2),pause:p.pause*(.85+Math.random()*.3)}:null)});
+$('#chips').innerHTML=SAMPLES.map((s,i)=>`<button type="button" data-i="${i}">${esc(s)}</button>`).join('');
+$('#chips').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('#txt').value=SAMPLES[+b.dataset.i];$('#form').requestSubmit()});
+$('#resetPace').addEventListener('click',()=>{Object.assign(pace,{wpm:null,pause:null,samples:0,manual:0});save();render();addMsg('sys','Pace learning reset.')});
+$('#clearMem').addEventListener('click',()=>{mem=defMem();mem.lists.shopping=[];mem.lastAdded=null;S.timers=[];S.fragment=null;S.pending=null;save();render();addMsg('sys','Memory cleared.')});
+
+setInterval(()=>{
+  const now=Date.now();let changed=false;
+  for(const x of S.timers.filter(x=>x.end<=now)){chime();say(`Your ${x.label} timer is done.`);changed=true}
+  S.timers=S.timers.filter(x=>x.end>now);
+  for(const r of mem.reminders.filter(r=>r.due&&r.due<=now)){chime();say(`Reminder: ${r.text}.`);changed=true}
+  if(changed){mem.reminders=mem.reminders.filter(r=>!r.due||r.due>now);save()}
+  if(S.timers.length||changed)render();
+},1000);
+
+if(!SR)notice('This browser has no built-in speech recognition. Use Chrome, Edge or Safari to talk, or type below.');
+render();
+addMsg('bot',"Hi. I'm ready when you are. Tap the circle and talk, or type below. Take as long as you need.");
+}
+</script>
+</body>
+</html>
