@@ -2,7 +2,7 @@
 
 A working prototype of **Adaptive Mode**: a setting that any voice assistant or voice search app could turn on so it adapts to the person speaking: their **pace**, their **speech**, and their **memory**.
 
-**Live demo:** open the GitHub Pages link for this repo in Chrome or Edge and allow the microphone. You can also type, and pick a speaking style to stand in for your voice.
+**Live demo:** https://saarauthmaan.github.io/adaptive-voice-assistant/ (open it in Chrome or Edge and allow the microphone). You can also type, and pick a speaking style to stand in for your voice.
 
 ## What Adaptive Mode does
 
