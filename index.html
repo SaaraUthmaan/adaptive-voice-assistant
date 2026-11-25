@@ -62,7 +62,15 @@ h1{font-size:clamp(30px,4vw,44px);line-height:1.05;margin:0 0 8px;text-wrap:bala
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chips button{border:1.5px solid #ffffff38;background:transparent;color:var(--on);border-radius:999px;padding:8px 14px;font-size:14px;min-height:40px;text-align:left}
 .chips button:hover{background:#ffffff14}
-.log{list-style:none;margin:0;padding:12px;display:flex;flex-direction:column;gap:10px;max-height:340px;overflow-y:auto;background:#0000002e;border-radius:16px}
+.log{list-style:none;margin:0;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:150px;max-height:300px;overflow-y:auto;background:#0000002e;border-radius:16px}
+.log .me.live{background:transparent;color:var(--on);border:2px dashed var(--accent);font-style:italic}
+.log .me.live::after{content:" …";opacity:.7}
+.pop{background:var(--deep2);border:2px solid var(--accent);border-radius:18px;padding:12px 14px;animation:popin .25s ease-out}
+.pop-h{margin:0 0 8px;font-weight:700;font-size:16px}
+.pop .chips button{border-color:var(--accent);font-size:15px;min-height:44px}
+@keyframes popin{from{opacity:0;transform:translateY(8px) scale(.97)}}
+@media(prefers-reduced-motion:reduce){.pop{animation:none}}
+.link{background:none;border:0;padding:6px 0;min-height:44px;color:var(--on);text-decoration:underline;font-size:14px}
 .log li{max-width:85%;padding:9px 14px;border-radius:16px;font-size:16px;overflow-wrap:anywhere}
 .log .me{align-self:flex-end;background:var(--accent);color:#2a0d04;border-bottom-right-radius:4px}
 .log .bot{align-self:flex-start;background:var(--deep2);border-bottom-left-radius:4px}
@@ -101,6 +109,7 @@ h1{font-size:clamp(30px,4vw,44px);line-height:1.05;margin:0 0 8px;text-wrap:bala
 
 <main class="band grid">
   <section class="device" id="device" data-state="idle">
+    <ol class="log" id="log" aria-live="polite" aria-label="Conversation"></ol>
     <div class="stage">
       <button class="orb" id="mic" aria-label="Tap to talk">
         <svg class="ring" viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="92" class="rtrack"/><circle cx="100" cy="100" r="92" class="rbar" id="rbar"/></svg>
@@ -109,6 +118,7 @@ h1{font-size:clamp(30px,4vw,44px);line-height:1.05;margin:0 0 8px;text-wrap:bala
       <p class="state" id="stateTxt">Tap to talk</p>
       <p class="caption" id="caption" aria-live="polite"></p>
     </div>
+    <div class="pop" id="pop" hidden role="group" aria-labelledby="popH"><p class="pop-h" id="popH"></p><div class="chips" id="chips"></div></div>
     <div class="notice" id="notice" hidden></div>
     <form class="ask" id="form">
       <input id="txt" placeholder="Or type what you'd say…" autocomplete="off" aria-label="Type what you would say">
@@ -121,10 +131,9 @@ h1{font-size:clamp(30px,4vw,44px);line-height:1.05;margin:0 0 8px;text-wrap:bala
     </form>
     <div class="opts">
       <label><input type="checkbox" id="voice" checked> Speak replies aloud</label>
-      <span>Try saying:</span>
+      <button type="button" class="link" id="exBtn" aria-expanded="false" aria-controls="examples">Show example phrases</button>
     </div>
-    <div class="chips" id="chips"></div>
-    <ol class="log" id="log"></ol>
+    <div class="chips" id="examples" hidden></div>
   </section>
 
   <aside class="side">
@@ -308,7 +317,7 @@ function run(p){
 
 /* ---------- the conversation loop ---------- */
 function handle(raw,meta){
-  addMsg('me',raw);
+  hidePop();clearLive();addMsg('me',raw);
   const idle=Date.now()-S.lastActive;S.lastActive=Date.now();
   let t,notes=[],gap=false,reply=null;
   if(S.adaptive){const c=clean(raw);t=c.t;notes=c.notes;gap=c.gap;if(meta){learn(meta.wpm,meta.pause);notes.unshift(`Pace ${Math.round(meta.wpm)} wpm, pauses ${meta.pause.toFixed(1)} s`)}}
@@ -336,6 +345,8 @@ function handle(raw,meta){
   }
   if(S.adaptive&&idle>45000&&mem.topics.length>1&&(!p||p.i!=='recap')&&!S.repeat)reply=`Welcome back. Before, ${mem.topics.at(-2)}. `+reply;
   showHeard(raw,t,notes);save();say(reply);render();
+  /* a reply that leaves them mid-thought counts as a pause: offer ways to finish */
+  if(S.adaptive){if(S.fragment)showPop('',S.fragment);else if(S.pending&&S.pending.type==='fill')showPop('',S.pending.t);else if(!p&&!P)showPop('',t)}
 }
 
 /* ---------- voice out ---------- */
@@ -363,15 +374,67 @@ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let rec=null,sess=null,endT=null;
 const rbar=$('#rbar');
 function ringRun(ms){rbar.style.transition='none';rbar.style.strokeDashoffset=ms?0:578;if(!ms)return;rbar.getBoundingClientRect();rbar.style.transition=`stroke-dashoffset ${ms}ms linear`;rbar.style.strokeDashoffset=578}
-function arm(first){clearTimeout(endT);const ms=first?(S.adaptive?8000:5000):patience();ringRun(ms);endT=setTimeout(()=>{try{rec.stop()}catch(e){}finish()},ms)}
+function arm(first,extra){clearTimeout(endT);const ms=(first?(S.adaptive?8000:5000):patience())+(extra||0);ringRun(ms);endT=setTimeout(()=>{try{rec.stop()}catch(e){}finish()},ms)}
+
+/* ---------- live words in the conversation ---------- */
+let liveLi=null;
+function liveMsg(text){const log=$('#log');if(!liveLi){liveLi=document.createElement('li');liveLi.className='me live';log.appendChild(liveLi)}liveLi.textContent=text;log.scrollTop=log.scrollHeight}
+function clearLive(){if(liveLi)liveLi.remove();liveLi=null}
+
+/* ---------- pop-out options when the person pauses ---------- */
+let popBase='',popMode='append',popItems=[];
+const GENERIC=['What was I doing?','Set a timer for 10 minutes',"What's on my shopping list?",'Remind me to take a break in 20 minutes','What time is it?'];
+function suggest(partial){
+  const t=partial?(S.adaptive?clean(partial).t:norm(partial)):'';
+  const L=mem.lists[mem.lastList]||[];
+  const recent=[...new Set([mem.lastAdded,...L.slice(-4).reverse()].filter(Boolean))].slice(0,4);
+  if(!t)return{h:'Not sure what to say? Tap one:',mode:'full',items:GENERIC.slice(0,4)};
+  if(GAP.test(t))return{h:'Is it one of these?',mode:'fill',items:recent.length?recent:['milk','bread','eggs']};
+  if(/\b(timer|alarm)\b/.test(t)&&!/\d/.test(t)){const f=/\bfor$/.test(t)?'':'for ';return{h:'How long?',mode:'append',items:['5 minutes','10 minutes','20 minutes','1 hour'].map(x=>f+x)}}
+  if(/^remind me( to)?$/.test(t)){const f=/to$/.test(t)?'':'to ';return{h:'Remind you to…',mode:'append',items:['take a break in 20 minutes','call the pharmacy','water the plants'].map(x=>f+x)}}
+  if(/^remind me (to )?.+ in$/.test(t))return{h:'In how long?',mode:'append',items:['10 minutes','30 minutes','1 hour']};
+  if(/^(add|put)( some)?$/.test(t))return{h:'Add what?',mode:'append',items:['milk to my shopping list','bread to my shopping list','eggs to my shopping list']};
+  if(/^(add|put) .+ (to|on|onto)( the| my)?$/.test(t)){const f=/(the|my)$/.test(t)?'':'my ';return{h:'Which list?',mode:'append',items:Object.keys(mem.lists).concat(mem.lists.todo?[]:['todo']).slice(0,3).map(x=>f+x+' list')}}
+  if(/^(add|put) (?!.* (to|on|onto)\b).+$/.test(t))return{h:'Where should it go?',mode:'append',items:['to my shopping list','to my todo list']};
+  if(/(what'?s on|what is on|read|show me)( my| the)?$/.test(t)){const f=/(my|the)$/.test(t)?'':'my ';return{h:'Which one?',mode:'append',items:Object.keys(mem.lists).slice(0,3).map(x=>f+x+' list').concat(['reminders'])}}
+  if(/^(take a note|make a note|note|write down)( that)?$/.test(t))return{h:'What should I note?',mode:'append',items:['call the bank tomorrow','pick up the dry cleaning']};
+  if(/^(set|start)( a)?$/.test(t))return{h:'Set…',mode:'append',items:['a timer for 5 minutes','a timer for 10 minutes','a reminder']};
+  return{h:'Did you mean one of these?',mode:'full',items:GENERIC.slice(0,4)};
+}
+function showPop(base,partial){
+  if(!S.adaptive)return;
+  const s=suggest(partial);if(!s.items.length)return;
+  popBase=base;popMode=s.mode;popItems=s.items;
+  $('#popH').textContent=s.h;
+  $('#chips').innerHTML=s.items.map((x,i)=>`<button type="button" data-i="${i}">${esc(x)}</button>`).join('');
+  $('#pop').hidden=false;
+}
+function hidePop(){$('#pop').hidden=true}
+function pick(item){
+  hidePop();
+  let text;
+  if(popMode==='full')text=item;
+  else if(popMode==='fill'){const b=norm(popBase);text=b&&GAP.test(b)?b.replace(GAP,item):item}
+  else text=sp(popBase+' '+item);
+  if(sess&&!sess.done){sess.text=text;sess.picked=true;try{rec.stop()}catch(e){}finish();return}
+  $('#txt').value='';clearTimeout(typeT);sendTyped(text);
+}
+let typeT=null;
+/* while listening: a silence longer than ~half its patience counts as a pause */
+setInterval(()=>{
+  if(!S.adaptive||!sess||sess.done||!$('#pop').hidden||sess.popped)return;
+  const now=performance.now(),since=now-(sess.last??sess.start),th=sess.last==null?3500:Math.max(1000,patience()*.45);
+  if(since>th){sess.popped=true;showPop(sess.text,sess.text);arm(false,6000)}
+},200);
 function micBlocked(){notice('The microphone is blocked in this view. Open the standalone file in Chrome or Edge to talk out loud. Typing below works the same way: the speaking-style menu stands in for your voice.')}
 function listen(){
   if(!SR){notice('This browser has no built-in speech recognition. Use Chrome, Edge or Safari to talk, or type below.');return}
   stopSpeak();
   try{rec=new SR()}catch(e){micBlocked();return}
   rec.lang='en-US';rec.interimResults=true;rec.continuous=S.adaptive;
-  sess={t0:null,last:null,gaps:[],text:'',done:false};
-  rec.onresult=e=>{const now=performance.now();if(sess.t0==null)sess.t0=now;else{const g=now-sess.last;if(g>350)sess.gaps.push(g/1000)}sess.last=now;let txt='';for(const r of e.results)txt+=r[0].transcript;sess.text=txt;caption(txt,true);arm(false)};
+  hidePop();
+  sess={t0:null,last:null,start:performance.now(),gaps:[],text:'',done:false,popped:false,picked:false};
+  rec.onresult=e=>{if(sess.done||sess.picked)return;const now=performance.now();if(sess.t0==null)sess.t0=now;else{const g=now-sess.last;if(g>350)sess.gaps.push(g/1000)}sess.last=now;let txt='';for(const r of e.results)txt+=r[0].transcript;sess.text=txt;liveMsg(txt);if(!$('#pop').hidden){hidePop();sess.popped=false}arm(false)};
   rec.onerror=e=>{if(/not-allowed|service-not-allowed|audio-capture/.test(e.error))micBlocked();finish()};
   rec.onend=()=>finish();
   try{rec.start();setState('listening');caption(S.adaptive?'Take your time…':'Listening…',true);arm(true)}catch(e){micBlocked()}
@@ -379,10 +442,10 @@ function listen(){
 function finish(){
   if(!sess||sess.done)return;sess.done=true;clearTimeout(endT);ringRun(0);
   try{rec&&rec.abort()}catch(e){}
-  const txt=sess.text.trim();if(!txt){setState('idle');caption('',false);return}
+  const txt=sess.text.trim();if(!txt){clearLive();hidePop();setState('idle');caption('',false);return}
   const dur=(sess.last-sess.t0)/1000,words=txt.split(/\s+/).length;
   const gs=sess.gaps.slice().sort((a,b)=>a-b);
-  const meta=dur>.8&&words>=3?{wpm:clamp(words/dur*60,50,260),pause:gs.length?gs[gs.length>>1]:.3}:null;
+  const meta=!sess.picked&&dur>.8&&words>=3?{wpm:clamp(words/dur*60,50,260),pause:gs.length?gs[gs.length>>1]:.3}:null;
   setState('thinking');handle(txt,meta);
 }
 
@@ -420,12 +483,17 @@ function render(){
 }
 
 $('#mode').checked=S.adaptive;
-$('#mode').addEventListener('change',e=>{S.adaptive=e.target.checked;S.pending=null;S.fragment=null;save();render();addMsg('sys',S.adaptive?'Adaptive Mode on. Matching your pace, waiting through pauses, keeping track of context.':'Adaptive Mode off. Standard assistant behaviour.')});
+$('#mode').addEventListener('change',e=>{S.adaptive=e.target.checked;S.pending=null;S.fragment=null;hidePop();save();render();addMsg('sys',S.adaptive?'Adaptive Mode on. Matching your pace, waiting through pauses, keeping track of context.':'Adaptive Mode off. Standard assistant behaviour.')});
 $('#voice').addEventListener('change',e=>{S.voice=e.target.checked;if(!S.voice)stopSpeak()});
 $('#mic').addEventListener('click',()=>{try{ac=ac||new(window.AudioContext||window.webkitAudioContext)()}catch(e){}if(sess&&!sess.done){try{rec.stop()}catch(e){}finish()}else listen()});
-$('#form').addEventListener('submit',e=>{e.preventDefault();const v=$('#txt').value.trim();if(!v)return;$('#txt').value='';stopSpeak();const p=PACE[$('#pace').value];handle(v,S.adaptive?{wpm:p.wpm*(.9+Math.random()*.2),pause:p.pause*(.85+Math.random()*.3)}:null)});
-$('#chips').innerHTML=SAMPLES.map((s,i)=>`<button type="button" data-i="${i}">${esc(s)}</button>`).join('');
-$('#chips').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('#txt').value=SAMPLES[+b.dataset.i];$('#form').requestSubmit()});
+function sendTyped(v){stopSpeak();const p=PACE[$('#pace').value];handle(v,S.adaptive?{wpm:p.wpm*(.9+Math.random()*.2),pause:p.pause*(.85+Math.random()*.3)}:null)}
+$('#form').addEventListener('submit',e=>{e.preventDefault();clearTimeout(typeT);const v=$('#txt').value.trim();if(!v)return;$('#txt').value='';sendTyped(v)});
+/* typing: stop for a moment mid-sentence and the options pop out */
+$('#txt').addEventListener('input',()=>{clearTimeout(typeT);hidePop();const v=$('#txt').value.trim();if(!S.adaptive||!v)return;typeT=setTimeout(()=>showPop(v,v),1800)});
+$('#chips').addEventListener('click',e=>{const b=e.target.closest('button');if(b)pick(popItems[+b.dataset.i])});
+$('#examples').innerHTML=SAMPLES.map((s,i)=>`<button type="button" data-i="${i}">${esc(s)}</button>`).join('');
+$('#examples').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('#txt').value=SAMPLES[+b.dataset.i];$('#form').requestSubmit()});
+$('#exBtn').addEventListener('click',e=>{const ex=$('#examples'),open=ex.hidden;ex.hidden=!open;e.target.setAttribute('aria-expanded',open);e.target.textContent=open?'Hide example phrases':'Show example phrases'});
 $('#resetPace').addEventListener('click',()=>{Object.assign(pace,{wpm:null,pause:null,samples:0,manual:0});save();render();addMsg('sys','Pace learning reset.')});
 $('#clearMem').addEventListener('click',()=>{mem=defMem();mem.lists.shopping=[];mem.lastAdded=null;S.timers=[];S.fragment=null;S.pending=null;save();render();addMsg('sys','Memory cleared.')});
 
@@ -441,6 +509,8 @@ setInterval(()=>{
 if(!SR)notice('This browser has no built-in speech recognition. Use Chrome, Edge or Safari to talk, or type below.');
 render();
 addMsg('bot',"Hi. I'm ready when you are. Tap the circle and talk, or type below. Take as long as you need.");
+/* nothing said yet after a while: that's a pause too */
+setTimeout(()=>{if(S.adaptive&&$('#log').children.length===1&&!(sess&&!sess.done))showPop('','')},6000);
 }
 </script>
 </body>
